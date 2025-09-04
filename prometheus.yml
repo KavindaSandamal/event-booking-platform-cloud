@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'booking-service'
+    static_configs:
+      - targets: ['booking:8000']
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth:8000']
+  - job_name: 'catalog-service'
+    static_configs:
+      - targets: ['catalog:8000']
+  - job_name: 'payment-service'
+    static_configs:
+      - targets: ['payment:8000']

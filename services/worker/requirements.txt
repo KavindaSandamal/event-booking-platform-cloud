@@ -1,0 +1,4 @@
+aio_pika
+psycopg2-binary
+SQLAlchemy
+requests

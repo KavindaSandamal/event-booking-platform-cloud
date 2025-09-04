@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: event-booking-platform
+  labels:
+    name: event-booking-platform
+    app.kubernetes.io/name: event-booking-platform
+    app.kubernetes.io/version: "1.0.0"

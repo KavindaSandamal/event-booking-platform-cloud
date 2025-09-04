@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: event-booking-platform
+data:
+  # Database Configuration
+  DB_NAME: "eventdb"
+  DB_USERNAME: "postgres"
+  
+  # Redis Configuration
+  REDIS_PASSWORD: "redis"
+  
+  # RabbitMQ Configuration
+  RABBITMQ_USER: "guest"
+  RABBITMQ_PASSWORD: "guest"
+  
+  # JWT Configuration
+  JWT_ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  
+  # Service URLs
+  AUTH_URL: "http://auth-service:8000"
+  CATALOG_URL: "http://catalog-service:8000"
+  BOOKING_URL: "http://booking-service:8000"
+  PAYMENT_URL: "http://payment-service:8000"
+  
+  # Performance Configuration
+  ENABLE_CIRCUIT_BREAKERS: "true"
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: "5"
+  CIRCUIT_BREAKER_RECOVERY_TIMEOUT: "60"
+  
+  # Logging Configuration
+  LOG_LEVEL: "INFO"
+  ENABLE_STRUCTURED_LOGGING: "true"
+  LOG_FORMAT: "json"
