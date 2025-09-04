@@ -22,14 +22,26 @@ export default function Login() {
 
     try {
       const r = await authAPI.post("/auth/login", { email, password: pass });
-      const { access_token, refresh_token, expires_in } = r.data;
+      const responseData = r.data;
+      
+      // Handle both old and new field name formats
+      const token = responseData.token || responseData.access_token;
+      const refreshToken = responseData.refreshToken || responseData.refresh_token;
+      const expiresIn = responseData.expiresIn || responseData.expires_in;
+
+      console.log("Login successful - Token:", token);
+      console.log("Login successful - Refresh token:", refreshToken);
+      console.log("Login successful - Expires in:", expiresIn);
+      console.log("Full response data:", responseData);
 
       dispatch(setCredentials({
-        access_token,
-        refresh_token,
-        expires_in,
+        token,
+        refreshToken,
+        expiresIn,
         user: { email }
       }));
+      
+      console.log("setCredentials dispatched");
     } catch (e) {
       setError("Login failed: " + (e?.response?.data?.detail || e.message));
     } finally {
@@ -39,11 +51,11 @@ export default function Login() {
 
   const handleRegisterSuccess = (response) => {
     setShowRegister(false);
-    const { access_token, refresh_token, expires_in } = response;
+    const { token, refreshToken, expiresIn } = response;
     dispatch(setCredentials({
-      access_token,
-      refresh_token,
-      expires_in,
+      token,
+      refreshToken,
+      expiresIn,
       user: { email }
     }));
   };

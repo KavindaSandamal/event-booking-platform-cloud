@@ -12,7 +12,7 @@ import uuid
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 AUTH_URL = os.getenv("AUTH_URL")
-BOOKING_URL = os.getenv("BOOKING_URL")
+BOOKING_URL = os.getenv("BOOKING_SERVICE_URL")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
@@ -57,6 +57,36 @@ async def get_current_user(authorization: str = Header(None)):
             pass
     
     raise HTTPException(401, "Invalid token")
+
+@app.post("/process", response_model=PaymentResponse)
+async def process_payment_simple(payment_data: dict, authorization: str = Header(None), db: Session = Depends(get_db)):
+    """Simple payment processing endpoint for frontend"""
+    try:
+        # Extract payment data
+        event_id = payment_data.get("event_id")
+        seats = payment_data.get("seats", 1)
+        amount = payment_data.get("amount")
+        payment_method = payment_data.get("payment_method", {})
+        
+        # For demo purposes, we'll create a simple payment record
+        payment = Payment(
+            user_id="demo_user",  # In real app, get from JWT token
+            booking_id=str(uuid.uuid4()),
+            amount=amount,
+            phone_number=payment_method.get("name", "Demo User"),
+            status="completed"
+        )
+        db.add(payment)
+        db.commit()
+        db.refresh(payment)
+        
+        return PaymentResponse(
+            payment_id=str(payment.id),
+            message="Payment processed successfully",
+            requires_verification=False
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Payment processing failed: {str(e)}")
 
 @app.post("/process-payment", response_model=PaymentResponse)
 async def process_payment(payment_req: PaymentRequest, authorization: str = Header(None), db: Session = Depends(get_db)):

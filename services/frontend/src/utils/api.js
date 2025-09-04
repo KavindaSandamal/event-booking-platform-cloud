@@ -4,7 +4,7 @@ import { logout, refreshToken, selectToken, selectRefreshToken } from '../store/
 
 // Create axios instance
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001',
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://event-booking-platform-alb-50648091.us-west-2.elb.amazonaws.com',
     timeout: 10000,
 });
 
@@ -71,7 +71,7 @@ api.interceptors.response.use(
 export default api;
 
 // Export individual service APIs - all use the same ALB URL since nginx routes them
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://event-booking-platform-alb-50648091.us-west-2.elb.amazonaws.com';
 
 export const authAPI = axios.create({
     baseURL: baseURL,
@@ -103,11 +103,25 @@ export const paymentAPI = axios.create({
 
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
+            } else {
+                // Try to get token from localStorage as fallback
+                const authData = localStorage.getItem('auth');
+                if (authData) {
+                    try {
+                        const parsedAuth = JSON.parse(authData);
+                        if (parsedAuth.token) {
+                            config.headers.Authorization = `Bearer ${parsedAuth.token}`;
+                        }
+                    } catch (e) {
+                        // Invalid JSON, ignore
+                    }
+                }
             }
 
             return config;
         },
         (error) => {
+            console.log("API Request interceptor error:", error);
             return Promise.reject(error);
         }
     );

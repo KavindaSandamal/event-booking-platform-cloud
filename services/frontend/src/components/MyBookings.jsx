@@ -18,6 +18,10 @@ export default function MyBookings() {
     }, []);
 
     const fetchBookings = async () => {
+        console.log("MyBookings - fetchBookings called");
+        console.log("MyBookings - token from Redux:", token);
+        console.log("MyBookings - localStorage token:", localStorage.getItem('token'));
+        
         try {
             const response = await bookingAPI.get("/booking/my-bookings");
             setBookings(response.data);

@@ -25,7 +25,16 @@ check_prerequisites() {
     echo -e "${YELLOW}📋 Checking prerequisites...${NC}"
     
     # Check if AWS CLI is installed
-    if ! command -v aws &> /dev/null; then
+    AWS_CLI_PATH=""
+    if command -v aws &> /dev/null; then
+        AWS_CLI_PATH="aws"
+    elif [ -f "/c/Program Files/Amazon/AWSCLIV2/aws.exe" ]; then
+        AWS_CLI_PATH="/c/Program Files/Amazon/AWSCLIV2/aws.exe"
+    elif [ -f "C:/Program Files/Amazon/AWSCLIV2/aws.exe" ]; then
+        AWS_CLI_PATH="C:/Program Files/Amazon/AWSCLIV2/aws.exe"
+    elif [ -f "C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe" ]; then
+        AWS_CLI_PATH="C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe"
+    else
         echo -e "${RED}❌ AWS CLI is not installed. Please install it first.${NC}"
         exit 1
     fi
@@ -43,7 +52,7 @@ check_prerequisites() {
     fi
     
     # Check AWS credentials
-    if ! aws sts get-caller-identity &> /dev/null; then
+    if ! $AWS_CLI_PATH sts get-caller-identity &> /dev/null; then
         echo -e "${RED}❌ AWS credentials not configured. Please run 'aws configure'${NC}"
         exit 1
     fi
@@ -54,7 +63,7 @@ check_prerequisites() {
 # Get AWS Account ID
 get_aws_account_id() {
     echo -e "${YELLOW}🔍 Getting AWS Account ID...${NC}"
-    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    AWS_ACCOUNT_ID=$($AWS_CLI_PATH sts get-caller-identity --query Account --output text)
     echo -e "${GREEN}✅ AWS Account ID: ${AWS_ACCOUNT_ID}${NC}"
 }
 
@@ -63,7 +72,7 @@ build_and_push_images() {
     echo -e "${YELLOW}🐳 Building and pushing Docker images to ECR...${NC}"
     
     # Login to ECR
-    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+    $AWS_CLI_PATH ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
     
     # Build and push each service
     services=("nginx" "auth" "catalog" "booking" "payment" "frontend")
@@ -120,7 +129,7 @@ update_ecs_service() {
     echo -e "${YELLOW}🔄 Updating ECS service...${NC}"
     
     # Force new deployment
-    aws ecs update-service \
+    $AWS_CLI_PATH ecs update-service \
         --cluster $PROJECT_NAME-cluster \
         --service $PROJECT_NAME-service \
         --force-new-deployment \
@@ -133,7 +142,7 @@ update_ecs_service() {
 wait_for_deployment() {
     echo -e "${YELLOW}⏳ Waiting for deployment to complete...${NC}"
     
-    aws ecs wait services-stable \
+    $AWS_CLI_PATH ecs wait services-stable \
         --cluster $PROJECT_NAME-cluster \
         --services $PROJECT_NAME-service \
         --region $AWS_REGION

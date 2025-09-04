@@ -34,12 +34,17 @@ export default function RegisterModal({ onClose, onSuccess }) {
 
         try {
             const response = await authAPI.post("/auth/register", { email, password });
-            const { access_token, refresh_token, expires_in } = response.data;
+            const responseData = response.data;
+            
+            // Handle both old and new field name formats
+            const token = responseData.token || responseData.access_token;
+            const refreshToken = responseData.refreshToken || responseData.refresh_token;
+            const expiresIn = responseData.expiresIn || responseData.expires_in;
 
             dispatch(setCredentials({
-                access_token,
-                refresh_token,
-                expires_in,
+                token,
+                refreshToken,
+                expiresIn,
                 user: { email }
             }));
 

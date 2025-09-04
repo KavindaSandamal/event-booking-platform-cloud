@@ -169,7 +169,8 @@ export default function Events({ onBookingComplete }) {
               <Book
                 event={selected}
                 token={token}
-                onClose={handleBookingComplete}
+                onClose={() => setSelected(null)}
+                onBooked={handleBookingComplete}
               />
             </div>
           </div>

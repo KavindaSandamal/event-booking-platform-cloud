@@ -31,6 +31,27 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
+# Elastic IP for NAT Gateway
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  depends_on = [aws_internet_gateway.main]
+
+  tags = {
+    Name = "${var.project_name}-nat-eip"
+  }
+}
+
+# NAT Gateway
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+  depends_on    = [aws_internet_gateway.main]
+
+  tags = {
+    Name = "${var.project_name}-nat-gateway"
+  }
+}
+
 resource "aws_subnet" "public" {
   count = length(var.availability_zones)
 
@@ -75,6 +96,28 @@ resource "aws_route_table_association" "public" {
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
+}
+
+# Private Route Table
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags = {
+    Name = "${var.project_name}-private-rt"
+  }
+}
+
+# Private Route Table Association
+resource "aws_route_table_association" "private" {
+  count = length(aws_subnet.private)
+
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
 }
 
 # Security Groups
@@ -179,10 +222,11 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "${var.project_name}-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  name        = "${var.project_name}-tg-v2"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
 
   health_check {
     enabled             = true
@@ -291,6 +335,146 @@ resource "aws_ecs_task_definition" "main" {
           awslogs-stream-prefix = "auth"
         }
       }
+    },
+    {
+      name  = "catalog"
+      image = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-catalog:latest"
+      
+      portMappings = [
+        {
+          containerPort = 8001
+          hostPort      = 8001
+        }
+      ]
+      
+      environment = [
+        {
+          name  = "DATABASE_URL"
+          value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
+        }
+      ]
+      
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.main.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "catalog"
+        }
+      }
+    },
+    {
+      name  = "booking"
+      image = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-booking:latest"
+      
+      portMappings = [
+        {
+          containerPort = 8002
+          hostPort      = 8002
+        }
+      ]
+      
+      environment = [
+        {
+          name  = "DATABASE_URL"
+          value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
+        },
+        {
+          name  = "REDIS_URL"
+          value = "redis://${aws_elasticache_replication_group.main.primary_endpoint_address}:6379"
+        },
+        {
+          name  = "RABBITMQ_URL"
+          value = "amqp://admin:${var.mq_password}@${aws_mq_broker.main.instances[0].endpoints[0]}:5672"
+        },
+        {
+          name  = "CATALOG_URL"
+          value = "http://localhost:8001"
+        },
+        {
+          name  = "AUTH_URL"
+          value = "http://localhost:8000"
+        },
+        {
+          name  = "PAYMENT_URL"
+          value = "http://localhost:8003"
+        }
+      ]
+      
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.main.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "booking"
+        }
+      }
+    },
+    {
+      name  = "payment"
+      image = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-payment:latest"
+      
+      portMappings = [
+        {
+          containerPort = 8003
+          hostPort      = 8003
+        }
+      ]
+      
+      environment = [
+        {
+          name  = "DATABASE_URL"
+          value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
+        },
+        {
+          name  = "RABBITMQ_URL"
+          value = "amqp://admin:${var.mq_password}@${aws_mq_broker.main.instances[0].endpoints[0]}:5672"
+        },
+        {
+          name  = "AUTH_URL"
+          value = "http://localhost:8000"
+        },
+        {
+          name  = "BOOKING_SERVICE_URL"
+          value = "http://localhost:8002"
+        }
+      ]
+      
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.main.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "payment"
+        }
+      }
+    },
+    {
+      name  = "frontend"
+      image = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-frontend:latest"
+      
+      portMappings = [
+        {
+          containerPort = 3000
+          hostPort      = 3000
+        }
+      ]
+      
+      environment = [
+        {
+          name  = "VITE_API_BASE_URL"
+          value = "http://${aws_lb.main.dns_name}"
+        }
+      ]
+      
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.main.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "frontend"
+        }
+      }
     }
   ])
 
@@ -364,7 +548,7 @@ resource "aws_db_instance" "main" {
   identifier = "${var.project_name}-db"
   
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15.7"
   instance_class = var.db_instance_class
   
   # Free tier: 20GB storage, db.t3.micro
@@ -434,7 +618,7 @@ resource "aws_mq_broker" "main" {
   broker_name = "${var.project_name}-mq"
   
   engine_type        = "RabbitMQ"
-  engine_version     = "3.11.20"
+  engine_version     = "3.13"
   host_instance_type = var.mq_instance_type
   
   security_groups = [aws_security_group.ecs.id]
@@ -442,9 +626,10 @@ resource "aws_mq_broker" "main" {
   
   # Free tier: single instance, no encryption
   deployment_mode = "SINGLE_INSTANCE"
+  auto_minor_version_upgrade = true
   
   user {
-    username = "guest"
+    username = "admin"
     password = var.mq_password
   }
   
@@ -501,6 +686,77 @@ resource "aws_iam_role" "ecs_task_role" {
       }
     ]
   })
+}
+
+# VPC Endpoints for ECR access from private subnets
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.ecs.id]
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = "*"
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-ecr-dkr-endpoint"
+  }
+}
+
+resource "aws_vpc_endpoint" "ecr_api" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.ecs.id]
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = "*"
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-ecr-api-endpoint"
+  }
+}
+
+resource "aws_vpc_endpoint" "logs" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.logs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.ecs.id]
+
+  tags = {
+    Name = "${var.project_name}-logs-endpoint"
+  }
 }
 
 # ECR Repositories

@@ -1,0 +1,15 @@
+{
+  "BudgetName": "Event-Booking-Platform-Budget",
+  "Notification": {
+    "NotificationType": "ACTUAL",
+    "ComparisonOperator": "GREATER_THAN",
+    "Threshold": 80,
+    "ThresholdType": "PERCENTAGE"
+  },
+  "Subscribers": [
+    {
+      "SubscriptionType": "EMAIL",
+      "Address": "your-email@example.com"
+    }
+  ]
+}
