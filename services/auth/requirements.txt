@@ -9,3 +9,5 @@ python-dotenv==1.0.0
 pydantic==2.5.0
 httpx==0.25.2
 prometheus-fastapi-instrumentator==6.1.0
+kafka-python==2.0.2
+redis==5.0.1

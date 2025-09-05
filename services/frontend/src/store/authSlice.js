@@ -79,6 +79,13 @@ const authSlice = createSlice({
     setCredentials: (state, action) => {
       const { token, refreshToken, expiresIn, user } = action.payload;
 
+      console.log("setCredentials called with:", { token, refreshToken, expiresIn, user });
+      console.log("Current state before update:", { 
+        token: state.token, 
+        isAuthenticated: state.isAuthenticated,
+        tokenExpiry: state.tokenExpiry 
+      });
+
       state.token = token;
       state.refreshToken = refreshToken;
       state.user = user;
@@ -89,16 +96,26 @@ const authSlice = createSlice({
         state.tokenExpiry = Date.now() + expiresIn * 1000;
       }
 
+      console.log("State after update:", { 
+        token: state.token, 
+        isAuthenticated: state.isAuthenticated,
+        tokenExpiry: state.tokenExpiry 
+      });
+
       // Persist auth to localStorage
-      localStorage.setItem(
-        "auth",
-        JSON.stringify({
-          token,
-          refreshToken,
-          tokenExpiry: state.tokenExpiry,
-          user,
-        })
-      );
+      const authData = {
+        token,
+        refreshToken,
+        tokenExpiry: state.tokenExpiry,
+        user,
+      };
+      
+      console.log("Saving to localStorage:", authData);
+      localStorage.setItem("auth", JSON.stringify(authData));
+      
+      // Verify it was saved
+      const saved = localStorage.getItem("auth");
+      console.log("Verified localStorage save:", saved);
     },
     logout: (state) => {
       state.token = null;

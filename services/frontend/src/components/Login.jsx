@@ -21,7 +21,16 @@ export default function Login() {
     setError("");
 
     try {
-      const r = await authAPI.post("/auth/login", { email, password: pass });
+      // Send form data instead of JSON for OAuth2PasswordRequestForm
+      const formData = new FormData();
+      formData.append('username', email);
+      formData.append('password', pass);
+      
+      const r = await authAPI.post("/auth/login", formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
       const responseData = r.data;
       
       // Handle both old and new field name formats
@@ -51,13 +60,8 @@ export default function Login() {
 
   const handleRegisterSuccess = (response) => {
     setShowRegister(false);
-    const { token, refreshToken, expiresIn } = response;
-    dispatch(setCredentials({
-      token,
-      refreshToken,
-      expiresIn,
-      user: { email }
-    }));
+    // The RegisterModal already handles setCredentials, so we just close the modal
+    console.log("Registration successful, closing modal");
   };
 
   return (

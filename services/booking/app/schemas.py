@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 import uuid
 from typing import Optional
+from datetime import datetime
 
 class BookingRequest(BaseModel):
     event_id: uuid.UUID
@@ -12,3 +13,4 @@ class BookingOut(BaseModel):
     event_id: uuid.UUID
     seats: int
     status: str
+    created_at: datetime

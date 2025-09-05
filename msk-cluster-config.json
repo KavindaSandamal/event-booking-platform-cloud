@@ -1,0 +1,34 @@
+﻿{
+    "encryption_info":  {
+                            "encryption_in_transit":  {
+                                                          "client_broker":  "TLS"
+                                                      }
+                        },
+    "kafka_version":  "2.8.1",
+    "client_authentication":  {
+                                  "sasl":  {
+                                               "scram":  {
+                                                             "enabled":  true
+                                                         }
+                                           }
+                              },
+    "cluster_name":  "event-booking-kafka-cluster",
+    "broker_node_group_info":  {
+                                   "security_groups":  [
+                                                           "sg-0d72557576d1b7c25"
+                                                       ],
+                                   "storage_info":  {
+                                                        "ebs_storage_info":  {
+                                                                                 "volume_size":  20
+                                                                             }
+                                                    },
+                                   "instance_type":  "kafka.t3.small",
+                                   "client_subnets":  [
+                                                          "subnet-0c3c044c4b688de39",
+                                                          "subnet-00c6e75a10b7da30a",
+                                                          "subnet-057aee8f6566cbd4e",
+                                                          "subnet-0f2fe45d1b288724f"
+                                                      ]
+                               },
+    "number_of_broker_nodes":  3
+}

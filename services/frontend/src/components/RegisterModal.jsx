@@ -36,10 +36,18 @@ export default function RegisterModal({ onClose, onSuccess }) {
             const response = await authAPI.post("/auth/register", { email, password });
             const responseData = response.data;
             
+            console.log("Registration response:", responseData);
+            console.log("Response status:", response.status);
+            console.log("Response headers:", response.headers);
+            
             // Handle both old and new field name formats
             const token = responseData.token || responseData.access_token;
             const refreshToken = responseData.refreshToken || responseData.refresh_token;
             const expiresIn = responseData.expiresIn || responseData.expires_in;
+
+            console.log("Extracted token:", token);
+            console.log("Extracted refreshToken:", refreshToken);
+            console.log("Extracted expiresIn:", expiresIn);
 
             dispatch(setCredentials({
                 token,
@@ -47,6 +55,8 @@ export default function RegisterModal({ onClose, onSuccess }) {
                 expiresIn,
                 user: { email }
             }));
+
+            console.log("setCredentials dispatched with:", { token, refreshToken, expiresIn, user: { email } });
 
             onSuccess(response.data);
         } catch (err) {

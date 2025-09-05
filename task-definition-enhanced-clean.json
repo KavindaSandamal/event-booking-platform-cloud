@@ -1,0 +1,277 @@
+{
+    "containerDefinitions": [
+        {
+            "name": "nginx",
+            "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-nginx:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 80,
+                    "hostPort": 80,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/event-booking-platform",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "nginx"
+                }
+            }
+        },
+        {
+            "name": "auth",
+            "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-auth:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "RABBITMQ_URL",
+                    "value": "amqp://guest:guest@amqps://b-483883d8-7726-459f-896e-44c11d009aae.mq.us-west-2.on.aws:5671:5672"
+                },
+                {
+                    "name": "DATABASE_URL",
+                    "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+                },
+                {
+                    "name": "REDIS_URL",
+                    "value": "redis://event-booking-platform-redis.muj5dn.ng.0001.usw2.cache.amazonaws.com:6379"
+                },
+                {
+                    "name": "ENABLE_METRICS",
+                    "value": "true"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/event-booking-platform",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "auth"
+                }
+            }
+        },
+        {
+            "name": "catalog",
+            "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-catalog:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8001,
+                    "hostPort": 8001,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "DATABASE_URL",
+                    "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+                },
+                {
+                    "name": "ENABLE_METRICS",
+                    "value": "true"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/event-booking-platform",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "catalog"
+                }
+            }
+        },
+        {
+            "name": "booking",
+            "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-booking:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8002,
+                    "hostPort": 8002,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "AUTH_URL",
+                    "value": "http://localhost:8000"
+                },
+                {
+                    "name": "CATALOG_URL",
+                    "value": "http://localhost:8001"
+                },
+                {
+                    "name": "PAYMENT_URL",
+                    "value": "http://localhost:8003"
+                },
+                {
+                    "name": "RABBITMQ_URL",
+                    "value": "amqp://admin:7ENBh1tJ@05h.;W[@amqps://b-483883d8-7726-459f-896e-44c11d009aae.mq.us-west-2.on.aws:5671:5672"
+                },
+                {
+                    "name": "DATABASE_URL",
+                    "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+                },
+                {
+                    "name": "REDIS_URL",
+                    "value": "redis://event-booking-platform-redis.muj5dn.ng.0001.usw2.cache.amazonaws.com:6379"
+                },
+                {
+                    "name": "ENABLE_METRICS",
+                    "value": "true"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/event-booking-platform",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "booking"
+                }
+            }
+        },
+        {
+            "name": "payment",
+            "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-payment:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8003,
+                    "hostPort": 8003,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "BOOKING_SERVICE_URL",
+                    "value": "http://localhost:8002"
+                },
+                {
+                    "name": "RABBITMQ_URL",
+                    "value": "amqp://admin:7ENBh1tJ@05h.;W[@amqps://b-483883d8-7726-459f-896e-44c11d009aae.mq.us-west-2.on.aws:5671:5672"
+                },
+                {
+                    "name": "DATABASE_URL",
+                    "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+                },
+                {
+                    "name": "ENABLE_METRICS",
+                    "value": "true"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/event-booking-platform",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "payment"
+                }
+            }
+        },
+        {
+            "name": "worker",
+            "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-worker:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8004,
+                    "hostPort": 8004,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": false,
+            "environment": [
+                {
+                    "name": "RABBITMQ_URL",
+                    "value": "amqp://admin:7ENBh1tJ@05h.;W[@amqps://b-483883d8-7726-459f-896e-44c11d009aae.mq.us-west-2.on.aws:5671:5672"
+                },
+                {
+                    "name": "DATABASE_URL",
+                    "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+                },
+                {
+                    "name": "REDIS_URL",
+                    "value": "redis://event-booking-platform-redis.muj5dn.ng.0001.usw2.cache.amazonaws.com:6379"
+                },
+                {
+                    "name": "ENABLE_METRICS",
+                    "value": "true"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/event-booking-platform",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "worker"
+                }
+            }
+        },
+        {
+            "name": "frontend",
+            "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-frontend:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 3000,
+                    "hostPort": 3000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "VITE_API_BASE_URL",
+                    "value": "http://event-booking-platform-alb-50648091.us-west-2.elb.amazonaws.com"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/event-booking-platform",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "frontend"
+                }
+            }
+        }
+    ],
+    "family": "event-booking-platform-task-enhanced",
+    "taskRoleArn": "arn:aws:iam::376129882286:role/event-booking-platform-ecs-task-role",
+    "executionRoleArn": "arn:aws:iam::376129882286:role/event-booking-platform-ecs-execution-role",
+    "networkMode": "awsvpc",
+    "volumes": [],
+    "placementConstraints": [],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "2048",
+    "memory": "4096"
+}

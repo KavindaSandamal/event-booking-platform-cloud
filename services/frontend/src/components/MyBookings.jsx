@@ -24,10 +24,10 @@ export default function MyBookings() {
         
         try {
             const response = await bookingAPI.get("/booking/my-bookings");
-            setBookings(response.data);
+            setBookings(response.data.bookings || []);
 
             // Fetch payment receipts for each booking
-            const paymentPromises = response.data
+            const paymentPromises = (response.data.bookings || [])
                 .filter(booking => booking.status === "confirmed")
                 .map(async (booking) => {
                     try {
