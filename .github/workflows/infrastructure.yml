@@ -1,0 +1,121 @@
+name: Infrastructure Deployment
+
+on:
+  push:
+    paths:
+      - 'infrastructure/**'
+      - '.github/workflows/infrastructure.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+
+env:
+  AWS_REGION: us-west-2
+  TF_VAR_environment: ${{ github.event.inputs.environment || 'production' }}
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    outputs:
+      plan-exitcode: ${{ steps.plan.outputs.exitcode }}
+      plan-output: ${{ steps.plan.outputs.stdout }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.5.0
+
+    - name: Terraform Format Check
+      run: terraform fmt -check
+      working-directory: infrastructure/aws/terraform
+
+    - name: Terraform Init
+      run: terraform init
+      working-directory: infrastructure/aws/terraform
+
+    - name: Terraform Validate
+      run: terraform validate
+      working-directory: infrastructure/aws/terraform
+
+    - name: Terraform Plan
+      id: plan
+      run: |
+        terraform plan -no-color -out=tfplan
+        echo "exitcode=$?" >> $GITHUB_OUTPUT
+        terraform show -no-color tfplan > plan.txt
+        echo "stdout<<EOF" >> $GITHUB_OUTPUT
+        cat plan.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+      working-directory: infrastructure/aws/terraform
+
+    - name: Upload Plan Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: terraform-plan
+        path: infrastructure/aws/terraform/tfplan
+
+  terraform-apply:
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.5.0
+
+    - name: Download Plan Artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: terraform-plan
+        path: infrastructure/aws/terraform
+
+    - name: Terraform Init
+      run: terraform init
+      working-directory: infrastructure/aws/terraform
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve tfplan
+      working-directory: infrastructure/aws/terraform
+
+    - name: Output Infrastructure Details
+      run: |
+        echo "## Infrastructure Deployment Complete" >> $GITHUB_STEP_SUMMARY
+        echo "### RDS Endpoint" >> $GITHUB_STEP_SUMMARY
+        terraform output -raw rds_endpoint >> $GITHUB_STEP_SUMMARY
+        echo "### Redis Endpoint" >> $GITHUB_STEP_SUMMARY
+        terraform output -raw redis_endpoint >> $GITHUB_STEP_SUMMARY
+        echo "### Kafka Bootstrap Servers" >> $GITHUB_STEP_SUMMARY
+        terraform output -raw kafka_bootstrap_servers >> $GITHUB_STEP_SUMMARY
+        echo "### ALB DNS Name" >> $GITHUB_STEP_SUMMARY
+        terraform output -raw alb_dns_name >> $GITHUB_STEP_SUMMARY
+      working-directory: infrastructure/aws/terraform

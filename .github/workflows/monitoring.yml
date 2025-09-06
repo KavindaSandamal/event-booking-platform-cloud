@@ -1,0 +1,161 @@
+name: Monitoring and Health Checks
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-west-2
+  ALB_URL: event-booking-platform-alb-50648091.us-west-2.elb.amazonaws.com
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Check ECS Service Health
+      run: |
+        echo "Checking ECS service status..."
+        aws ecs describe-services \
+          --cluster event-booking-platform-cluster \
+          --services event-booking-platform-service \
+          --region ${{ env.AWS_REGION }} \
+          --query 'services[0].{Status:status,RunningCount:runningCount,DesiredCount:desiredCount,TaskDefinition:taskDefinition}'
+
+    - name: Check Application Health
+      run: |
+        echo "Checking application health endpoints..."
+        
+        # Check main application
+        if curl -f -s http://${{ env.ALB_URL }}/health > /dev/null; then
+          echo "✅ Main application is healthy"
+        else
+          echo "❌ Main application is not responding"
+          exit 1
+        fi
+        
+        # Check individual services (if accessible)
+        echo "Checking individual service health..."
+        
+        # Get ECS task IPs
+        TASK_ARN=$(aws ecs list-tasks \
+          --cluster event-booking-platform-cluster \
+          --service-name event-booking-platform-service \
+          --region ${{ env.AWS_REGION }} \
+          --query 'taskArns[0]' \
+          --output text)
+        
+        if [ "$TASK_ARN" != "None" ] && [ "$TASK_ARN" != "" ]; then
+          echo "Found running task: $TASK_ARN"
+        else
+          echo "No running tasks found"
+        fi
+
+    - name: Check Database Connectivity
+      run: |
+        echo "Checking database connectivity..."
+        # This would require database credentials in secrets
+        # For now, just check if RDS instance is available
+        aws rds describe-db-instances \
+          --db-instance-identifier event-booking-platform-db \
+          --region ${{ env.AWS_REGION }} \
+          --query 'DBInstances[0].{Status:DBInstanceStatus,Endpoint:Endpoint.Address}'
+
+    - name: Check Redis Connectivity
+      run: |
+        echo "Checking Redis connectivity..."
+        aws elasticache describe-cache-clusters \
+          --cache-cluster-id event-booking-platform-redis \
+          --region ${{ env.AWS_REGION }} \
+          --query 'CacheClusters[0].{Status:CacheClusterStatus,Endpoint:ConfigurationEndpoint.Address}'
+
+    - name: Check Kafka Connectivity
+      run: |
+        echo "Checking Kafka connectivity..."
+        aws kafka list-clusters \
+          --region ${{ env.AWS_REGION }} \
+          --query 'ClusterInfoList[?ClusterName==`event-booking-platform-kafka`].{Status:State,ClusterArn:ClusterArn}'
+
+    - name: Generate Health Report
+      run: |
+        echo "## Health Check Report - $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "### Application Status" >> $GITHUB_STEP_SUMMARY
+        echo "- **ALB URL**: http://${{ env.ALB_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ✅ Healthy" >> $GITHUB_STEP_SUMMARY
+        echo "### Infrastructure Status" >> $GITHUB_STEP_SUMMARY
+        echo "- **ECS Cluster**: event-booking-platform-cluster" >> $GITHUB_STEP_SUMMARY
+        echo "- **ECS Service**: event-booking-platform-service" >> $GITHUB_STEP_SUMMARY
+        echo "- **Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+
+  performance-test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install k6
+      run: |
+        sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+        echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install k6
+
+    - name: Run Performance Tests
+      run: |
+        cat > performance-test.js << 'EOF'
+        import http from 'k6/http';
+        import { check, sleep } from 'k6';
+
+        export let options = {
+          stages: [
+            { duration: '2m', target: 10 }, // Ramp up
+            { duration: '5m', target: 10 }, // Stay at 10 users
+            { duration: '2m', target: 0 },  // Ramp down
+          ],
+        };
+
+        export default function () {
+          let response = http.get('http://${{ env.ALB_URL }}/');
+          check(response, {
+            'status is 200': (r) => r.status === 200,
+            'response time < 2s': (r) => r.timings.duration < 2000,
+          });
+          sleep(1);
+        }
+        EOF
+        
+        k6 run performance-test.js
+
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run OWASP ZAP Baseline Scan
+      uses: zaproxy/action-baseline@v0.7.0
+      with:
+        target: 'http://${{ env.ALB_URL }}'
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a'
+
+    - name: Upload ZAP Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: zap-results
+        path: zap-results/

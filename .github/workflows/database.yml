@@ -1,0 +1,217 @@
+name: Database Migrations
+
+on:
+  push:
+    paths:
+      - 'services/*/app/models.py'
+      - 'services/*/app/schemas.py'
+      - 'migrations/**'
+  workflow_dispatch:
+    inputs:
+      migration_type:
+        description: 'Type of migration to run'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+        - auto
+        - manual
+        - rollback
+
+env:
+  AWS_REGION: us-west-2
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+jobs:
+  database-migration:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install sqlalchemy alembic psycopg2-binary
+
+    - name: Create migration script
+      run: |
+        cat > migrate.py << 'EOF'
+        import os
+        import sys
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import sessionmaker
+        
+        # Database connection
+        DATABASE_URL = os.getenv('DATABASE_URL')
+        if not DATABASE_URL:
+            print("DATABASE_URL not found")
+            sys.exit(1)
+        
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        
+        try:
+            # Check if tables exist
+            result = session.execute(text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """))
+            tables = [row[0] for row in result.fetchall()]
+            print(f"Existing tables: {tables}")
+            
+            # Create tables if they don't exist
+            if not tables:
+                print("No tables found, creating schema...")
+                
+                # Create users table
+                session.execute(text("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        username VARCHAR(50) UNIQUE NOT NULL,
+                        email VARCHAR(100) UNIQUE NOT NULL,
+                        password_hash VARCHAR(255) NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                
+                # Create events table
+                session.execute(text("""
+                    CREATE TABLE IF NOT EXISTS events (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        title VARCHAR(200) NOT NULL,
+                        description TEXT,
+                        date TIMESTAMP NOT NULL,
+                        location VARCHAR(200) NOT NULL,
+                        price DECIMAL(10,2) NOT NULL,
+                        capacity INTEGER NOT NULL,
+                        available_seats INTEGER NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                
+                # Create bookings table
+                session.execute(text("""
+                    CREATE TABLE IF NOT EXISTS bookings (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        user_id UUID REFERENCES users(id),
+                        event_id UUID REFERENCES events(id),
+                        seats INTEGER NOT NULL,
+                        total_amount DECIMAL(10,2) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                
+                # Create payments table
+                session.execute(text("""
+                    CREATE TABLE IF NOT EXISTS payments (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        booking_id UUID REFERENCES bookings(id),
+                        amount DECIMAL(10,2) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        payment_method VARCHAR(50),
+                        transaction_id VARCHAR(100),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                
+                session.commit()
+                print("Database schema created successfully!")
+            else:
+                print("Tables already exist, checking for updates...")
+                
+                # Add any missing columns or constraints here
+                # This is where you would add new migrations
+                
+            # Verify tables
+            result = session.execute(text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+                ORDER BY table_name
+            """))
+            tables = [row[0] for row in result.fetchall()]
+            print(f"Final tables: {tables}")
+            
+        except Exception as e:
+            print(f"Error: {e}")
+            session.rollback()
+            sys.exit(1)
+        finally:
+            session.close()
+        EOF
+
+    - name: Run database migration
+      run: |
+        python migrate.py
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    - name: Verify database schema
+      run: |
+        cat > verify_schema.py << 'EOF'
+        import os
+        import sys
+        from sqlalchemy import create_engine, text
+        
+        DATABASE_URL = os.getenv('DATABASE_URL')
+        engine = create_engine(DATABASE_URL)
+        
+        with engine.connect() as conn:
+            # Check table structure
+            result = conn.execute(text("""
+                SELECT 
+                    table_name,
+                    column_name,
+                    data_type,
+                    is_nullable
+                FROM information_schema.columns 
+                WHERE table_schema = 'public'
+                ORDER BY table_name, ordinal_position
+            """))
+            
+            print("Database Schema:")
+            print("=" * 50)
+            current_table = None
+            for row in result.fetchall():
+                if current_table != row[0]:
+                    current_table = row[0]
+                    print(f"\n{table_name}:")
+                print(f"  {row[1]} ({row[2]}) {'NULL' if row[3] == 'YES' else 'NOT NULL'}")
+        
+        print("\nDatabase verification completed successfully!")
+        EOF
+        
+        python verify_schema.py
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    - name: Generate Migration Report
+      run: |
+        echo "## Database Migration Report" >> $GITHUB_STEP_SUMMARY
+        echo "### Status: ✅ Completed Successfully" >> $GITHUB_STEP_SUMMARY
+        echo "### Tables Created/Updated:" >> $GITHUB_STEP_SUMMARY
+        echo "- users" >> $GITHUB_STEP_SUMMARY
+        echo "- events" >> $GITHUB_STEP_SUMMARY
+        echo "- bookings" >> $GITHUB_STEP_SUMMARY
+        echo "- payments" >> $GITHUB_STEP_SUMMARY
+        echo "### Migration Type: ${{ github.event.inputs.migration_type || 'auto' }}" >> $GITHUB_STEP_SUMMARY

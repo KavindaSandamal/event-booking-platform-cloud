@@ -1,0 +1,171 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: 'Task definition revision to rollback to'
+        required: true
+        default: 'previous'
+        type: string
+      confirm_rollback:
+        description: 'Type "ROLLBACK" to confirm'
+        required: true
+        default: ''
+        type: string
+
+env:
+  AWS_REGION: us-west-2
+  ECS_CLUSTER: event-booking-platform-cluster
+  ECS_SERVICE: event-booking-platform-service
+
+jobs:
+  validate-rollback:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_rollback == 'ROLLBACK'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Validate rollback target
+      run: |
+        if [ "${{ github.event.inputs.rollback_to }}" = "previous" ]; then
+          echo "Rolling back to previous task definition..."
+          CURRENT_TASK_DEF=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'services[0].taskDefinition' \
+            --output text)
+          
+          echo "Current task definition: $CURRENT_TASK_DEF"
+          
+          # Get the previous revision
+          TASK_FAMILY=$(echo $CURRENT_TASK_DEF | cut -d: -f1)
+          CURRENT_REVISION=$(echo $CURRENT_TASK_DEF | cut -d: -f2)
+          PREVIOUS_REVISION=$((CURRENT_REVISION - 1))
+          
+          if [ $PREVIOUS_REVISION -lt 1 ]; then
+            echo "No previous revision available"
+            exit 1
+          fi
+          
+          ROLLBACK_TASK_DEF="$TASK_FAMILY:$PREVIOUS_REVISION"
+          echo "Rollback target: $ROLLBACK_TASK_DEF"
+        else
+          ROLLBACK_TASK_DEF="${{ github.event.inputs.rollback_to }}"
+          echo "Rolling back to specified task definition: $ROLLBACK_TASK_DEF"
+        fi
+        
+        # Validate the task definition exists
+        if aws ecs describe-task-definition \
+          --task-definition "$ROLLBACK_TASK_DEF" \
+          --region ${{ env.AWS_REGION }} > /dev/null 2>&1; then
+          echo "✅ Task definition $ROLLBACK_TASK_DEF exists and is valid"
+          echo "ROLLBACK_TASK_DEF=$ROLLBACK_TASK_DEF" >> $GITHUB_ENV
+        else
+          echo "❌ Task definition $ROLLBACK_TASK_DEF does not exist"
+          exit 1
+        fi
+
+  execute-rollback:
+    needs: validate-rollback
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_rollback == 'ROLLBACK'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Get current service status
+      run: |
+        echo "Getting current service status..."
+        aws ecs describe-services \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE }} \
+          --region ${{ env.AWS_REGION }} \
+          --query 'services[0].{Status:status,RunningCount:runningCount,DesiredCount:desiredCount,TaskDefinition:taskDefinition}'
+
+    - name: Execute rollback
+      run: |
+        echo "Executing rollback to ${{ env.ROLLBACK_TASK_DEF }}..."
+        
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --service ${{ env.ECS_SERVICE }} \
+          --task-definition ${{ env.ROLLBACK_TASK_DEF }} \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Wait for rollback to complete
+      run: |
+        echo "Waiting for rollback to complete..."
+        aws ecs wait services-stable \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE }} \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Verify rollback
+      run: |
+        echo "Verifying rollback..."
+        CURRENT_TASK_DEF=$(aws ecs describe-services \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE }} \
+          --region ${{ env.AWS_REGION }} \
+          --query 'services[0].taskDefinition' \
+          --output text)
+        
+        echo "Current task definition after rollback: $CURRENT_TASK_DEF"
+        
+        if [ "$CURRENT_TASK_DEF" = "${{ env.ROLLBACK_TASK_DEF }}" ]; then
+          echo "✅ Rollback completed successfully!"
+        else
+          echo "❌ Rollback failed - task definition mismatch"
+          exit 1
+        fi
+
+    - name: Check application health
+      run: |
+        echo "Checking application health after rollback..."
+        ALB_URL="event-booking-platform-alb-50648091.us-west-2.elb.amazonaws.com"
+        
+        # Wait a bit for the application to start
+        sleep 30
+        
+        if curl -f -s "http://$ALB_URL/health" > /dev/null; then
+          echo "✅ Application is healthy after rollback"
+        else
+          echo "⚠️ Application health check failed - may need more time to start"
+        fi
+
+    - name: Generate rollback report
+      run: |
+        echo "## Rollback Report" >> $GITHUB_STEP_SUMMARY
+        echo "### Status: ✅ Completed Successfully" >> $GITHUB_STEP_SUMMARY
+        echo "### Rollback Target: ${{ env.ROLLBACK_TASK_DEF }}" >> $GITHUB_STEP_SUMMARY
+        echo "### Application URL: http://event-booking-platform-alb-50648091.us-west-2.elb.amazonaws.com" >> $GITHUB_STEP_SUMMARY
+        echo "### Rollback Time: $(date)" >> $GITHUB_STEP_SUMMARY
+
+  rollback-failed:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_rollback != 'ROLLBACK'
+    
+    steps:
+    - name: Rollback not confirmed
+      run: |
+        echo "❌ Rollback not confirmed. Please type 'ROLLBACK' in the confirm_rollback field to proceed."
+        exit 1

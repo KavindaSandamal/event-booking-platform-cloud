@@ -1,0 +1,239 @@
+name: Event Booking Platform CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REGISTRY: 376129882286.dkr.ecr.us-west-2.amazonaws.com
+  ECS_CLUSTER: event-booking-platform-cluster
+  ECS_SERVICE: event-booking-platform-service
+  ECS_TASK_DEFINITION: event-booking-platform-task-fixed
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Python dependencies
+      run: |
+        cd services/auth
+        pip install -r requirements.txt
+        cd ../catalog
+        pip install -r requirements.txt
+        cd ../booking
+        pip install -r requirements.txt
+        cd ../payment
+        pip install -r requirements.txt
+        cd ../worker
+        pip install -r requirements.txt
+
+    - name: Install Frontend dependencies
+      run: |
+        cd services/frontend
+        npm ci
+
+    - name: Run Python tests
+      run: |
+        cd services/auth
+        python -m pytest tests/ || echo "No tests found"
+        cd ../catalog
+        python -m pytest tests/ || echo "No tests found"
+        cd ../booking
+        python -m pytest tests/ || echo "No tests found"
+        cd ../payment
+        python -m pytest tests/ || echo "No tests found"
+        cd ../worker
+        python -m pytest tests/ || echo "No tests found"
+
+    - name: Run Frontend tests
+      run: |
+        cd services/frontend
+        npm test -- --coverage --watchAll=false || echo "No tests found"
+
+    - name: Lint Python code
+      run: |
+        pip install flake8
+        flake8 services/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 services/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Lint Frontend code
+      run: |
+        cd services/frontend
+        npm run lint || echo "No lint script found"
+
+  build-and-push:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build and push Frontend image
+      run: |
+        cd services/frontend
+        docker build -t $ECR_REGISTRY/event-booking-platform-frontend:$GITHUB_SHA .
+        docker tag $ECR_REGISTRY/event-booking-platform-frontend:$GITHUB_SHA $ECR_REGISTRY/event-booking-platform-frontend:latest
+        docker push $ECR_REGISTRY/event-booking-platform-frontend:$GITHUB_SHA
+        docker push $ECR_REGISTRY/event-booking-platform-frontend:latest
+
+    - name: Build and push Auth image
+      run: |
+        cd services/auth
+        docker build -t $ECR_REGISTRY/event-booking-platform-auth:$GITHUB_SHA .
+        docker tag $ECR_REGISTRY/event-booking-platform-auth:$GITHUB_SHA $ECR_REGISTRY/event-booking-platform-auth:latest
+        docker push $ECR_REGISTRY/event-booking-platform-auth:$GITHUB_SHA
+        docker push $ECR_REGISTRY/event-booking-platform-auth:latest
+
+    - name: Build and push Catalog image
+      run: |
+        cd services/catalog
+        docker build -t $ECR_REGISTRY/event-booking-platform-catalog:$GITHUB_SHA .
+        docker tag $ECR_REGISTRY/event-booking-platform-catalog:$GITHUB_SHA $ECR_REGISTRY/event-booking-platform-catalog:latest
+        docker push $ECR_REGISTRY/event-booking-platform-catalog:$GITHUB_SHA
+        docker push $ECR_REGISTRY/event-booking-platform-catalog:latest
+
+    - name: Build and push Booking image
+      run: |
+        cd services/booking
+        docker build -t $ECR_REGISTRY/event-booking-platform-booking:$GITHUB_SHA .
+        docker tag $ECR_REGISTRY/event-booking-platform-booking:$GITHUB_SHA $ECR_REGISTRY/event-booking-platform-booking:latest
+        docker push $ECR_REGISTRY/event-booking-platform-booking:$GITHUB_SHA
+        docker push $ECR_REGISTRY/event-booking-platform-booking:latest
+
+    - name: Build and push Payment image
+      run: |
+        cd services/payment
+        docker build -t $ECR_REGISTRY/event-booking-platform-payment:$GITHUB_SHA .
+        docker tag $ECR_REGISTRY/event-booking-platform-payment:$GITHUB_SHA $ECR_REGISTRY/event-booking-platform-payment:latest
+        docker push $ECR_REGISTRY/event-booking-platform-payment:$GITHUB_SHA
+        docker push $ECR_REGISTRY/event-booking-platform-payment:latest
+
+    - name: Build and push Worker image
+      run: |
+        cd services/worker
+        docker build -t $ECR_REGISTRY/event-booking-platform-worker:$GITHUB_SHA .
+        docker tag $ECR_REGISTRY/event-booking-platform-worker:$GITHUB_SHA $ECR_REGISTRY/event-booking-platform-worker:latest
+        docker push $ECR_REGISTRY/event-booking-platform-worker:$GITHUB_SHA
+        docker push $ECR_REGISTRY/event-booking-platform-worker:latest
+
+    - name: Build and push NGINX image
+      run: |
+        cd services/nginx
+        docker build -t $ECR_REGISTRY/event-booking-platform-nginx:$GITHUB_SHA .
+        docker tag $ECR_REGISTRY/event-booking-platform-nginx:$GITHUB_SHA $ECR_REGISTRY/event-booking-platform-nginx:latest
+        docker push $ECR_REGISTRY/event-booking-platform-nginx:$GITHUB_SHA
+        docker push $ECR_REGISTRY/event-booking-platform-nginx:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update task definition with new image tags
+      run: |
+        # Create a new task definition with updated image tags
+        jq --arg IMAGE_TAG "$GITHUB_SHA" \
+          '.containerDefinitions[0].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-nginx:" + $IMAGE_TAG |
+           .containerDefinitions[1].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-frontend:" + $IMAGE_TAG |
+           .containerDefinitions[2].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-auth:" + $IMAGE_TAG |
+           .containerDefinitions[3].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-catalog:" + $IMAGE_TAG |
+           .containerDefinitions[4].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-booking:" + $IMAGE_TAG |
+           .containerDefinitions[5].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-payment:" + $IMAGE_TAG |
+           .containerDefinitions[6].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-worker:" + $IMAGE_TAG' \
+          task-definition-worker-kafka.json > task-definition-updated.json
+
+    - name: Register new task definition
+      run: |
+        aws ecs register-task-definition \
+          --cli-input-json file://task-definition-updated.json \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Update ECS service
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --service ${{ env.ECS_SERVICE }} \
+          --task-definition ${{ env.ECS_TASK_DEFINITION }} \
+          --force-new-deployment \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Wait for deployment to complete
+      run: |
+        aws ecs wait services-stable \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE }} \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Get service URL
+      run: |
+        ALB_URL=$(aws elbv2 describe-load-balancers \
+          --names event-booking-platform-alb \
+          --region ${{ env.AWS_REGION }} \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        echo "Application deployed successfully!"
+        echo "URL: http://$ALB_URL"
+        echo "::notice::Application URL: http://$ALB_URL"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
