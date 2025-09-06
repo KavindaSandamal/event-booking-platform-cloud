@@ -32,7 +32,7 @@ export default function Events({ onBookingComplete }) {
       try {
         setLoading(true);
         const response = await catalogAPI.get("/catalog/events");
-        setEvents(response.data);
+        setEvents(response.data.events || []);
       } catch (error) {
         console.error("Failed to fetch events:", error);
       } finally {

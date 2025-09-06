@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from .models import Base, Event
-from .schemas import EventIn, EventOut
+from .schemas import EventIn, EventOut, EventCreate
 import os
 from datetime import datetime
 
@@ -16,7 +16,7 @@ import sys
 sys.path.append('/app/shared')
 # Try to import Kafka client, fallback if not available
 try:
-    from kafka_client import get_kafka_client, publish_event, EventTypes
+    from kafka_client import get_kafka_client, publish_event_event, EventTypes
     KAFKA_AVAILABLE = True
 except ImportError:
     KAFKA_AVAILABLE = False
@@ -58,8 +58,7 @@ else:
 # Setup circuit breakers
 db_circuit_breaker = get_circuit_breaker("catalog-db", CircuitBreakerConfig(
     failure_threshold=3,
-    success_threshold=2,
-    timeout=30
+    recovery_timeout=30
 ))
 
 # Add CORS middleware
@@ -127,9 +126,8 @@ async def create_event(
                 title=event.title,
                 description=event.description,
                 date=event.date,
-                location=event.location,
+                venue=event.venue,
                 capacity=event.capacity,
-                price=event.price,
                 created_at=datetime.utcnow()
             )
             
@@ -142,11 +140,11 @@ async def create_event(
         
         # Publish event created event
         background_tasks.add_task(
-            publish_event,
+            publish_event_event,
             EventTypes.EVENT_CREATED,
             str(db_event.id),
             title=event.title,
-            location=event.location,
+            venue=event.venue,
             capacity=event.capacity
         )
         
@@ -155,9 +153,8 @@ async def create_event(
             title=db_event.title,
             description=db_event.description,
             date=db_event.date,
-            location=db_event.location,
+            venue=db_event.venue,
             capacity=db_event.capacity,
-            price=db_event.price,
             created_at=db_event.created_at
         )
         
@@ -182,10 +179,8 @@ async def update_event(
             db_event.title = event.title
             db_event.description = event.description
             db_event.date = event.date
-            db_event.location = event.location
+            db_event.venue = event.venue
             db_event.capacity = event.capacity
-            db_event.price = event.price
-            db_event.updated_at = datetime.utcnow()
             
             db.commit()
             db.refresh(db_event)
@@ -195,11 +190,11 @@ async def update_event(
         
         # Publish event updated event
         background_tasks.add_task(
-            publish_event,
+            publish_event_event,
             EventTypes.EVENT_UPDATED,
             str(db_event.id),
             title=event.title,
-            location=event.location,
+            venue=event.venue,
             capacity=event.capacity
         )
         
@@ -208,9 +203,8 @@ async def update_event(
             title=db_event.title,
             description=db_event.description,
             date=db_event.date,
-            location=db_event.location,
+            venue=db_event.venue,
             capacity=db_event.capacity,
-            price=db_event.price,
             created_at=db_event.created_at
         )
         
@@ -236,7 +230,7 @@ async def delete_event(
             # Store event data for event publishing
             event_data = {
                 "title": db_event.title,
-                "location": db_event.location,
+                "venue": db_event.venue,
                 "capacity": db_event.capacity
             }
             
@@ -249,11 +243,11 @@ async def delete_event(
         
         # Publish event deleted event
         background_tasks.add_task(
-            publish_event,
+            publish_event_event,
             EventTypes.EVENT_DELETED,
             event_id,
             title=event_data["title"],
-            location=event_data["location"],
+            venue=event_data["venue"],
             capacity=event_data["capacity"]
         )
         
@@ -277,9 +271,8 @@ async def get_events(db: Session = Depends(get_db)):
                     title=event.title,
                     description=event.description,
                     date=event.date,
-                    location=event.location,
+                    venue=event.venue,
                     capacity=event.capacity,
-                    price=event.price,
                     created_at=event.created_at
                 )
                 for event in events
@@ -306,9 +299,8 @@ async def get_event(event_id: str, db: Session = Depends(get_db)):
                 title=event.title,
                 description=event.description,
                 date=event.date,
-                location=event.location,
+                venue=event.venue,
                 capacity=event.capacity,
-                price=event.price,
                 created_at=event.created_at
             )
         

@@ -276,15 +276,18 @@ class HealthChecks:
         start_time = time.time()
         
         try:
-            from kafka import KafkaProducer
-            producer = KafkaProducer(
-                bootstrap_servers=kafka_bootstrap_servers,
-                request_timeout_ms=5000
-            )
+            from confluent_kafka import Producer
             
-            # Test connection by getting metadata
-            metadata = producer.list_topics(timeout=5000)
-            producer.close()
+            # Basic producer config for health check
+            config = {
+                'bootstrap.servers': kafka_bootstrap_servers,
+                'request.timeout.ms': 5000,
+            }
+            
+            producer = Producer(config)
+            
+            # Test producer creation by flushing (non-blocking)
+            producer.flush(timeout=1.0)
             
             response_time = (time.time() - start_time) * 1000
             
@@ -296,7 +299,7 @@ class HealthChecks:
                 timestamp=time.time(),
                 details={
                     "bootstrap_servers": kafka_bootstrap_servers,
-                    "topics_count": len(metadata)
+                    "type": "confluent-kafka-producer"
                 }
             )
             

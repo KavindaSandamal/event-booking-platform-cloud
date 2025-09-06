@@ -6,11 +6,16 @@ from sqlalchemy.orm import sessionmaker, Session
 from jose import jwt, JWTError
 from .utils import JWT_SECRET, JWT_ALGORITHM, verify_token, is_token_expired
 import os
+import sys
 from .models import Base, User
 from .schemas import UserCreate, Token, RefreshToken
 from .utils import hash_password, verify_password, create_access_token, create_refresh_token
 from pydantic import BaseModel
 from datetime import datetime, timezone
+
+# Add shared directory to path for Kafka client
+sys.path.append('/app/shared')
+from kafka_client import get_kafka_client, EventTypes
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -54,6 +59,23 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
+
+    # Publish user registration event to Kafka
+    try:
+        kafka_client = get_kafka_client()
+        kafka_client.publish_event(
+            EventTypes.USER_REGISTERED,
+            {
+                "user_id": str(user.id),
+                "email": user.email,
+                "service": "auth"
+            },
+            key=str(user.id),
+            topic="user-events"
+        )
+    except Exception as e:
+        # Log error but don't fail the registration
+        print(f"Failed to publish user registration event: {e}")
 
     return {
         "access_token": access_token, 

@@ -10,6 +10,9 @@ class EventIn(BaseModel):
     venue: Optional[str]
     capacity: int
 
+class EventCreate(EventIn):
+    pass
+
 class EventOut(EventIn):
     id: uuid.UUID
     created_at: datetime

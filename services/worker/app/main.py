@@ -11,7 +11,7 @@ from typing import Dict, Any
 from datetime import datetime
 
 # Add shared components to path
-sys.path.append('../../shared')
+sys.path.append('/app/shared')
 
 from kafka_client import get_kafka_client, EventTypes
 from health import setup_default_health_checks
@@ -28,8 +28,7 @@ class EventProcessor:
         self.kafka_client = get_kafka_client()
         self.circuit_breaker = get_circuit_breaker("worker-processing", CircuitBreakerConfig(
             failure_threshold=5,
-            success_threshold=3,
-            timeout=60
+            recovery_timeout=60
         ))
         
     async def process_user_event(self, event: Dict[str, Any], key: str, topic: str, partition: int, offset: int):

@@ -64,8 +64,7 @@ else:
 # Setup circuit breakers
 db_circuit_breaker = get_circuit_breaker("auth-db", CircuitBreakerConfig(
     failure_threshold=3,
-    success_threshold=2,
-    timeout=30
+    recovery_timeout=30
 ))
 
 # Add CORS middleware

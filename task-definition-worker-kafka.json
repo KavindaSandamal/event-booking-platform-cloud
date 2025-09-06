@@ -1,0 +1,261 @@
+{
+  "family": "event-booking-platform-task-fixed",
+  "taskRoleArn": "arn:aws:iam::376129882286:role/event-booking-platform-ecs-task-role",
+  "executionRoleArn": "arn:aws:iam::376129882286:role/event-booking-platform-ecs-execution-role",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "containerDefinitions": [
+    {
+      "name": "nginx",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-nginx:latest",
+      "cpu": 128,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 80,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "nginx"
+        }
+      }
+    },
+    {
+      "name": "auth",
+        "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-auth:v1.6",
+      "cpu": 128,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "RABBITMQ_URL",
+          "value": "amqps://guest:guest@b-483883d8-7726-459f-896e-44c11d009aae.mq.us-west-2.amazonaws.com:5671"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+        },
+        {
+          "name": "REDIS_URL",
+          "value": "redis://event-booking-platform-redis.muj5dn.ng.0001.usw2.cache.amazonaws.com:6379"
+        },
+        {
+          "name": "KAFKA_BOOTSTRAP_SERVERS",
+          "value": "b-1.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096,b-2.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096"
+        },
+        {
+          "name": "ENABLE_KAFKA",
+          "value": "true"
+        },
+        {
+          "name": "KAFKA_SASL_USERNAME",
+          "value": "kafka"
+        },
+        {
+          "name": "KAFKA_SASL_PASSWORD",
+          "value": "kafka123"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "auth"
+        }
+      }
+    },
+    {
+      "name": "catalog",
+        "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-catalog:v1.12",
+      "cpu": 128,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 8001,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+        },
+        {
+          "name": "KAFKA_BOOTSTRAP_SERVERS",
+          "value": "b-1.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096,b-2.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096"
+        },
+        {
+          "name": "ENABLE_KAFKA",
+          "value": "true"
+        },
+        {
+          "name": "KAFKA_SASL_USERNAME",
+          "value": "kafka"
+        },
+        {
+          "name": "KAFKA_SASL_PASSWORD",
+          "value": "kafka123"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "catalog"
+        }
+      }
+    },
+    {
+      "name": "booking",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-booking:v1.6",
+      "cpu": 128,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 8002,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        { "name": "AUTH_URL", "value": "http://localhost:8000" },
+        { "name": "PAYMENT_URL", "value": "http://localhost:8003" },
+        {
+          "name": "RABBITMQ_URL",
+          "value": "amqps://admin:7ENBh1tJ%4005h.%3BW%5B@b-483883d8-7726-459f-896e-44c11d009aae.mq.us-west-2.amazonaws.com:5671"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+        },
+        { "name": "CATALOG_URL", "value": "http://localhost:8001" },
+        {
+          "name": "REDIS_URL",
+          "value": "redis://event-booking-platform-redis.muj5dn.ng.0001.usw2.cache.amazonaws.com:6379"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "booking"
+        }
+      }
+    },
+    {
+      "name": "payment",
+        "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-payment:v1.7",
+      "cpu": 128,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 8003,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        { "name": "BOOKING_SERVICE_URL", "value": "http://localhost:8002" },
+        {
+          "name": "RABBITMQ_URL",
+          "value": "amqps://admin:7ENBh1tJ%4005h.%3BW%5B@b-483883d8-7726-459f-896e-44c11d009aae.mq.us-west-2.amazonaws.com:5671"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "payment"
+        }
+      }
+    },
+    {
+      "name": "frontend",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-frontend:latest",
+      "cpu": 128,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "VITE_API_BASE_URL",
+          "value": "http://event-booking-platform-alb-50648091.us-west-2.elb.amazonaws.com"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "frontend"
+        }
+      }
+    },
+    {
+      "name": "worker",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-worker:v1.21",
+      "cpu": 128,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 8004,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": false,
+      "environment": [
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+        },
+        {
+          "name": "REDIS_URL",
+          "value": "redis://event-booking-platform-redis.muj5dn.ng.0001.usw2.cache.amazonaws.com:6379"
+        },
+        {
+          "name": "KAFKA_BOOTSTRAP_SERVERS",
+          "value": "b-1.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096,b-2.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096"
+        },
+        { "name": "ENABLE_KAFKA", "value": "true" },
+        { "name": "KAFKA_SASL_USERNAME", "value": "kafka" },
+        { "name": "KAFKA_SASL_PASSWORD", "value": "kafka123" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "worker"
+        }
+      }
+    }
+  ]
+}

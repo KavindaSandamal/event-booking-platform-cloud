@@ -1,211 +1,229 @@
 """
-Kafka Client for Event Streaming
-Provides producer and consumer functionality for event-driven architecture
+Kafka Client for Event Booking Platform
+Handles Kafka operations for scaling and event streaming with AWS MSK (SASL/SCRAM over TLS)
 """
 
-import json
-import asyncio
-import logging
-from typing import Dict, Any, Callable, Optional
-from kafka import KafkaProducer, KafkaConsumer
-from kafka.errors import KafkaError
 import os
+import json
+import logging
+import asyncio
+from typing import Optional, Dict, Any, Callable
+from enum import Enum
+from datetime import datetime, timezone
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class KafkaClient:
-    """Kafka client for publishing and consuming events"""
-    
-    def __init__(self, bootstrap_servers: str = None):
-        self.bootstrap_servers = bootstrap_servers or os.getenv(
-            'KAFKA_BOOTSTRAP_SERVERS', 
-            'localhost:9092'
-        )
-        self.producer = None
-        self.consumers = {}
-        
-    def _get_producer(self) -> KafkaProducer:
-        """Get or create Kafka producer"""
-        if self.producer is None:
-            self.producer = KafkaProducer(
-                bootstrap_servers=self.bootstrap_servers,
-                value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-                key_serializer=lambda k: k.encode('utf-8') if k else None,
-                acks='all',  # Wait for all replicas to acknowledge
-                retries=3,
-                retry_backoff_ms=100,
-                request_timeout_ms=30000,
-                max_block_ms=5000
-            )
-        return self.producer
-    
-    async def publish_event(self, topic: str, event: Dict[str, Any], key: str = None) -> bool:
-        """Publish an event to a Kafka topic"""
-        try:
-            producer = self._get_producer()
-            
-            # Add metadata to event
-            event_with_metadata = {
-                **event,
-                'timestamp': asyncio.get_event_loop().time(),
-                'source': os.getenv('SERVICE_NAME', 'unknown')
-            }
-            
-            future = producer.send(
-                topic, 
-                value=event_with_metadata,
-                key=key
-            )
-            
-            # Wait for confirmation
-            record_metadata = future.get(timeout=10)
-            logger.info(f"Event published to topic {topic}, partition {record_metadata.partition}")
-            return True
-            
-        except KafkaError as e:
-            logger.error(f"Failed to publish event to topic {topic}: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"Unexpected error publishing event: {e}")
-            return False
-    
-    def create_consumer(self, topic: str, group_id: str, auto_offset_reset: str = 'latest') -> KafkaConsumer:
-        """Create a Kafka consumer for a topic"""
-        consumer = KafkaConsumer(
-            topic,
-            bootstrap_servers=self.bootstrap_servers,
-            group_id=group_id,
-            auto_offset_reset=auto_offset_reset,
-            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            key_deserializer=lambda k: k.decode('utf-8') if k else None,
-            enable_auto_commit=True,
-            auto_commit_interval_ms=1000,
-            session_timeout_ms=30000,
-            heartbeat_interval_ms=10000
-        )
-        
-        self.consumers[f"{topic}_{group_id}"] = consumer
-        return consumer
-    
-    async def consume_events(self, topic: str, group_id: str, handler: Callable, auto_offset_reset: str = 'latest'):
-        """Consume events from a topic with a handler function"""
-        consumer = self.create_consumer(topic, group_id, auto_offset_reset)
-        
-        try:
-            logger.info(f"Starting to consume events from topic {topic} with group {group_id}")
-            
-            for message in consumer:
-                try:
-                    # Process message in async context
-                    await handler(message.value, message.key, message.topic, message.partition, message.offset)
-                except Exception as e:
-                    logger.error(f"Error processing message from topic {topic}: {e}")
-                    # Continue processing other messages
-                    continue
-                    
-        except KeyboardInterrupt:
-            logger.info(f"Stopping consumer for topic {topic}")
-        except Exception as e:
-            logger.error(f"Consumer error for topic {topic}: {e}")
-        finally:
-            consumer.close()
-    
-    def close(self):
-        """Close all connections"""
-        if self.producer:
-            self.producer.close()
-        
-        for consumer in self.consumers.values():
-            consumer.close()
-        
-        logger.info("Kafka client connections closed")
-
-# Event types and schemas
-class EventTypes:
-    """Standard event types for the platform"""
+class EventTypes(Enum):
+    """Event types for the booking platform"""
     USER_REGISTERED = "user.registered"
     USER_LOGIN = "user.login"
     USER_LOGOUT = "user.logout"
     EVENT_CREATED = "event.created"
     EVENT_UPDATED = "event.updated"
-    EVENT_DELETED = "event.deleted"
     BOOKING_CREATED = "booking.created"
     BOOKING_CANCELLED = "booking.cancelled"
-    PAYMENT_INITIATED = "payment.initiated"
-    PAYMENT_COMPLETED = "payment.completed"
+    PAYMENT_PROCESSED = "payment.processed"
     PAYMENT_FAILED = "payment.failed"
+    PAYMENT_COMPLETED = "payment.completed"
     NOTIFICATION_SENT = "notification.sent"
 
-class EventSchemas:
-    """Event schemas for validation"""
-    
-    @staticmethod
-    def user_registered(user_id: str, email: str, **kwargs) -> Dict[str, Any]:
-        return {
-            "event_type": EventTypes.USER_REGISTERED,
-            "user_id": user_id,
-            "email": email,
-            "metadata": kwargs
-        }
-    
-    @staticmethod
-    def booking_created(booking_id: str, user_id: str, event_id: str, seats: list, **kwargs) -> Dict[str, Any]:
-        return {
-            "event_type": EventTypes.BOOKING_CREATED,
-            "booking_id": booking_id,
-            "user_id": user_id,
-            "event_id": event_id,
-            "seats": seats,
-            "metadata": kwargs
-        }
-    
-    @staticmethod
-    def payment_completed(payment_id: str, booking_id: str, user_id: str, amount: float, **kwargs) -> Dict[str, Any]:
-        return {
-            "event_type": EventTypes.PAYMENT_COMPLETED,
-            "payment_id": payment_id,
-            "booking_id": booking_id,
-            "user_id": user_id,
-            "amount": amount,
-            "metadata": kwargs
-        }
+class KafkaClient:
+    """Kafka client for publishing and consuming events with AWS MSK SASL/SCRAM support"""
+
+    def __init__(self):
+        # AWS MSK Configuration
+        self.bootstrap_servers = os.getenv(
+            "KAFKA_BOOTSTRAP_SERVERS",
+            "b-1.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096,"
+            "b-2.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096"
+        )
+        self.enabled = os.getenv("ENABLE_KAFKA", "true").lower() == "true"
+
+        # SASL/SCRAM Configuration
+        self.sasl_username = os.getenv("KAFKA_SASL_USERNAME", "")
+        self.sasl_password = os.getenv("KAFKA_SASL_PASSWORD", "")
+
+        self.producer = None
+        self.consumer = None
+
+        if self.enabled:
+            try:
+                from confluent_kafka import Producer, Consumer
+                
+                # SASL/SCRAM Configuration for AWS MSK
+                producer_config = {
+                    'bootstrap.servers': self.bootstrap_servers,
+                    'security.protocol': 'SASL_SSL',
+                    'sasl.mechanism': 'SCRAM-SHA-512',
+                    'sasl.username': self.sasl_username,
+                    'sasl.password': self.sasl_password,
+                    'client.id': 'event-booking-platform',
+                    'retries': 5,
+                    'retry.backoff.ms': 1000,
+                    'request.timeout.ms': 30000,
+                    'metadata.max.age.ms': 300000,
+                    'connections.max.idle.ms': 540000,
+                }
+
+                self.producer = Producer(producer_config)
+                logger.info(f"Kafka producer initialized with servers: {self.bootstrap_servers}")
+                logger.info("Kafka client using SASL_SSL with SCRAM-SHA-512")
+
+            except ImportError:
+                logger.warning("confluent-kafka not installed. Kafka features disabled.")
+                self.enabled = False
+            except Exception as e:
+                logger.error(f"Failed to initialize Kafka client: {e}")
+                self.enabled = False
+        else:
+            logger.info("Kafka is disabled via ENABLE_KAFKA environment variable")
+
+    def publish_event(self, event_type: EventTypes, data: Dict[str, Any],
+                      key: Optional[str] = None, topic: Optional[str] = None) -> bool:
+        """Publish an event to Kafka"""
+        if not self.enabled or not self.producer:
+            logger.debug(f"Kafka disabled, skipping event: {event_type.value}")
+            return False
+
+        try:
+            topic = topic or f"event-booking-{event_type.value.replace('.', '-')}"
+            event_data = {
+                "event_type": event_type.value,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": data,
+                "service": data.get("service", "unknown"),
+                "version": "1.0",
+            }
+
+            # Use confluent-kafka producer
+            self.producer.produce(
+                topic=topic,
+                key=key.encode('utf-8') if key else None,
+                value=json.dumps(event_data).encode('utf-8'),
+                callback=self._delivery_callback
+            )
+            self.producer.flush(timeout=10)
+            logger.info(f"Event published: {event_type.value} → {topic}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to publish event {event_type.value}: {e}")
+            # Note: Topics will be auto-created when first message is published
+            return False
+
+    def _delivery_callback(self, err, msg):
+        """Callback for message delivery confirmation"""
+        if err is not None:
+            logger.error(f'Message delivery failed: {err}')
+        else:
+            logger.debug(f'Message delivered to {msg.topic()} [{msg.partition()}] at offset {msg.offset()}')
+
+    def create_consumer(self, group_id: str, topics: list,
+                        auto_offset_reset: str = "earliest"):
+        """Create a Kafka consumer for the specified topics"""
+        if not self.enabled:
+            logger.debug("Kafka disabled, cannot create consumer")
+            return None
+
+        try:
+            from confluent_kafka import Consumer
+            
+            consumer_config = {
+                'bootstrap.servers': self.bootstrap_servers,
+                'security.protocol': 'SASL_SSL',
+                'sasl.mechanism': 'SCRAM-SHA-512',
+                'sasl.username': self.sasl_username,
+                'sasl.password': self.sasl_password,
+                'group.id': group_id,
+                'auto.offset.reset': auto_offset_reset,
+                'enable.auto.commit': True,
+                'client.id': f'event-booking-platform-{group_id}',
+                'session.timeout.ms': 30000,
+                'heartbeat.interval.ms': 10000,
+                'metadata.max.age.ms': 300000,
+            }
+
+            consumer = Consumer(consumer_config)
+            consumer.subscribe(topics)
+            
+            logger.info(f"Kafka consumer created for topics {topics}, group {group_id}")
+            return consumer
+
+        except Exception as e:
+            logger.error(f"Failed to create Kafka consumer: {e}")
+            return None
+
+    async def consume_events(self, topic: str, group_id: str, handler: Callable) -> None:
+        """Consume events from a Kafka topic asynchronously"""
+        if not self.enabled:
+            logger.debug("Kafka disabled, cannot consume events")
+            return
+
+        consumer = self.create_consumer(group_id, [topic])
+        if not consumer:
+            return
+
+        try:
+            logger.info(f"Consuming events from topic: {topic}")
+            while True:
+                msg = consumer.poll(timeout=1.0)
+                if msg is None:
+                    await asyncio.sleep(0.1)
+                    continue
+                if msg.error():
+                    logger.error(f"Consumer error: {msg.error()}")
+                    continue
+                
+                try:
+                    # Parse message data
+                    value = json.loads(msg.value().decode('utf-8')) if msg.value() else None
+                    key = msg.key().decode('utf-8') if msg.key() else None
+                    
+                    await handler(value, key, msg.topic(), msg.partition(), msg.offset())
+                except Exception as e:
+                    logger.error(f"Handler error: {e}")
+                    continue
+        except Exception as e:
+            logger.error(f"Consumer error: {e}")
+        finally:
+            consumer.close()
+            logger.info("Kafka consumer closed")
+
+    def close(self):
+        """Close the Kafka client"""
+        if self.producer:
+            self.producer.flush()
+            # confluent-kafka Producer doesn't have a close method
+            logger.info("Kafka producer flushed")
+        if self.consumer:
+            self.consumer.close()
+            logger.info("Kafka consumer closed")
 
 # Global Kafka client instance
-kafka_client = None
+_kafka_client = None
 
 def get_kafka_client() -> KafkaClient:
-    """Get global Kafka client instance"""
-    global kafka_client
-    if kafka_client is None:
-        kafka_client = KafkaClient()
-    return kafka_client
+    """Get the global Kafka client instance"""
+    global _kafka_client
+    if _kafka_client is None:
+        _kafka_client = KafkaClient()
+    return _kafka_client
 
-async def publish_user_event(event_type: str, user_id: str, **data):
-    """Publish user-related events"""
-    client = get_kafka_client()
-    event = {
-        "event_type": event_type,
-        "user_id": user_id,
-        **data
-    }
-    await client.publish_event("user-events", event, key=user_id)
+# Convenience publishing functions
+def publish_user_event(event_type: EventTypes, user_id: str, **data) -> bool:
+    return get_kafka_client().publish_event(event_type, {"user_id": user_id, "service": "auth", **data},
+                                            key=user_id, topic="user-events")
 
-async def publish_booking_event(event_type: str, booking_id: str, **data):
-    """Publish booking-related events"""
-    client = get_kafka_client()
-    event = {
-        "event_type": event_type,
-        "booking_id": booking_id,
-        **data
-    }
-    await client.publish_event("booking-events", event, key=booking_id)
+def publish_booking_event(event_type: EventTypes, booking_id: str, **data) -> bool:
+    return get_kafka_client().publish_event(event_type, {"booking_id": booking_id, "service": "booking", **data},
+                                            key=booking_id, topic="booking-events")
 
-async def publish_payment_event(event_type: str, payment_id: str, **data):
-    """Publish payment-related events"""
-    client = get_kafka_client()
-    event = {
-        "event_type": event_type,
-        "payment_id": payment_id,
-        **data
-    }
-    await client.publish_event("payment-events", event, key=payment_id)
+def publish_payment_event(event_type: EventTypes, payment_id: str, **data) -> bool:
+    return get_kafka_client().publish_event(event_type, {"payment_id": payment_id, "service": "payment", **data},
+                                            key=payment_id, topic="payment-events")
+
+def publish_event_event(event_type: EventTypes, event_id: str, **data) -> bool:
+    return get_kafka_client().publish_event(event_type, {"event_id": event_id, "service": "catalog", **data},
+                                            key=event_id, topic="event-events")

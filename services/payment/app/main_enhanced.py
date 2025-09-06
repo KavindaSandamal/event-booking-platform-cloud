@@ -63,14 +63,12 @@ else:
 try:
     db_circuit_breaker = get_circuit_breaker("payment-db", CircuitBreakerConfig(
         failure_threshold=3,
-        success_threshold=2,
-        timeout=30
+        recovery_timeout=30
     ))
 
     auth_circuit_breaker = get_circuit_breaker("auth-service", CircuitBreakerConfig(
         failure_threshold=5,
-        success_threshold=3,
-        timeout=30
+        recovery_timeout=30
     ))
     CIRCUIT_BREAKER_AVAILABLE = True
 except NameError:
@@ -82,8 +80,7 @@ except NameError:
 if CIRCUIT_BREAKER_AVAILABLE:
     booking_circuit_breaker = get_circuit_breaker("booking-service", CircuitBreakerConfig(
         failure_threshold=5,
-        success_threshold=3,
-        timeout=30
+        recovery_timeout=30
     ))
 else:
     booking_circuit_breaker = None
