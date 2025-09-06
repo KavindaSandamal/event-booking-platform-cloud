@@ -47,7 +47,7 @@ jobs:
     - name: Install Frontend dependencies
       run: |
         cd services/frontend
-        npm ci
+        npm ci --legacy-peer-deps
 
     - name: Run Python tests
       run: |
@@ -65,7 +65,7 @@ jobs:
     - name: Run Frontend tests
       run: |
         cd services/frontend
-        npm test -- --coverage --watchAll=false || echo "No tests found"
+        npm run test -- --coverage --watchAll=false || echo "No tests found"
 
     - name: Lint Python code
       run: |
