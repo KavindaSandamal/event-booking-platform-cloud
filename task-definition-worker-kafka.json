@@ -47,11 +47,19 @@
         },
         {
           "name": "DATABASE_URL",
-          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
         },
         {
           "name": "REDIS_URL",
           "value": "redis://event-booking-platform-redis.muj5dn.ng.0001.usw2.cache.amazonaws.com:6379"
+        },
+        {
+          "name": "AUTH_URL",
+          "value": "http://localhost:8000"
+        },
+        {
+          "name": "BOOKING_SERVICE_URL",
+          "value": "http://localhost:8002"
         },
         {
           "name": "KAFKA_BOOTSTRAP_SERVERS",
@@ -94,7 +102,7 @@
       "environment": [
         {
           "name": "DATABASE_URL",
-          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
         },
         {
           "name": "KAFKA_BOOTSTRAP_SERVERS",
@@ -124,7 +132,7 @@
     },
     {
       "name": "booking",
-      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-booking:v1.6",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-booking:enhanced",
       "cpu": 128,
       "memory": 512,
       "portMappings": [
@@ -136,14 +144,14 @@
       "essential": true,
       "environment": [
         { "name": "AUTH_URL", "value": "http://localhost:8000" },
-        { "name": "PAYMENT_URL", "value": "http://localhost:8003" },
+        { "name": "PAYMENT_SERVICE_URL", "value": "http://localhost:8003" },
         {
           "name": "RABBITMQ_URL",
           "value": "amqps://admin:7ENBh1tJ%4005h.%3BW%5B@b-483883d8-7726-459f-896e-44c11d009aae.mq.us-west-2.amazonaws.com:5671"
         },
         {
           "name": "DATABASE_URL",
-          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
         },
         { "name": "CATALOG_URL", "value": "http://localhost:8001" },
         {
@@ -162,7 +170,7 @@
     },
     {
       "name": "payment",
-        "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-payment:v1.7",
+        "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-payment:enhanced",
       "cpu": 128,
       "memory": 512,
       "portMappings": [
@@ -173,6 +181,7 @@
       ],
       "essential": true,
       "environment": [
+        { "name": "AUTH_URL", "value": "http://localhost:8000" },
         { "name": "BOOKING_SERVICE_URL", "value": "http://localhost:8002" },
         {
           "name": "RABBITMQ_URL",
@@ -180,7 +189,23 @@
         },
         {
           "name": "DATABASE_URL",
-          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
+        },
+        {
+          "name": "KAFKA_BOOTSTRAP_SERVERS",
+          "value": "b-1.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096,b-2.eventbookingkafkaclust.7xxw9x.c7.kafka.us-west-2.amazonaws.com:9096"
+        },
+        {
+          "name": "ENABLE_KAFKA",
+          "value": "true"
+        },
+        {
+          "name": "KAFKA_SASL_USERNAME",
+          "value": "kafka"
+        },
+        {
+          "name": "KAFKA_SASL_PASSWORD",
+          "value": "kafka123"
         }
       ],
       "logConfiguration": {
@@ -234,7 +259,7 @@
       "environment": [
         {
           "name": "DATABASE_URL",
-          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb"
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
         },
         {
           "name": "REDIS_URL",

@@ -13,8 +13,11 @@ export default function MyBookings() {
     const [generatingPDF, setGeneratingPDF] = useState(false);
 
     useEffect(() => {
-        fetchBookings();
-        fetchEvents();
+        const loadData = async () => {
+            await fetchEvents();
+            await fetchBookings();
+        };
+        loadData();
     }, []);
 
     const fetchBookings = async () => {
@@ -171,6 +174,11 @@ export default function MyBookings() {
                 {bookings.map((booking) => {
                     const event = events[booking.event_id];
                     const receipt = paymentReceipts[booking.id];
+                    
+                    // Debug logging
+                    if (!event) {
+                        console.log("Event not found for booking:", booking.id, "event_id:", booking.event_id, "available events:", Object.keys(events));
+                    }
 
                     return (
                         <div key={booking.id} className="card">

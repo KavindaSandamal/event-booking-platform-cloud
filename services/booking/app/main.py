@@ -271,7 +271,7 @@ async def get_booking_payment(booking_id: str, authorization: str = Header(None)
         async with httpx.AsyncClient() as client:
             # Query payment service to find payment by booking_id
             payment_url = os.getenv("PAYMENT_URL", "http://payment:8000")
-            resp = await client.get(f"{payment_url}/payment-by-booking/{booking_id}")
+            resp = await client.get(f"{payment_url}/booking/{booking_id}")
             if resp.status_code == 200:
                 payment_data = resp.json()
                 return {"payment_id": payment_data.get("payment_id"), "status": booking.status}

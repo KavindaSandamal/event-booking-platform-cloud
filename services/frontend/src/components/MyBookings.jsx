@@ -18,16 +18,16 @@ export default function MyBookings() {
     }, []);
 
     const fetchBookings = async () => {
-        console.log("MyBookings - fetchBookings called");
-        console.log("MyBookings - token from Redux:", token);
-        console.log("MyBookings - localStorage token:", localStorage.getItem('token'));
-        
         try {
             const response = await bookingAPI.get("/booking/my-bookings");
-            setBookings(response.data.bookings || []);
+            console.log("Bookings response:", response.data);
+            
+            // Ensure we have an array of bookings
+            const bookings = response.data.bookings || response.data || [];
+            setBookings(bookings);
 
             // Fetch payment receipts for each booking
-            const paymentPromises = (response.data.bookings || [])
+            const paymentPromises = bookings
                 .filter(booking => booking.status === "confirmed")
                 .map(async (booking) => {
                     try {
@@ -69,8 +69,12 @@ export default function MyBookings() {
     const fetchEvents = async () => {
         try {
             const response = await catalogAPI.get("/catalog/events");
+            console.log("Events response:", response.data);
+            
+            // Ensure we have an array of events
+            const eventsArray = response.data.events || response.data || [];
             const eventsMap = {};
-            response.data.forEach(event => {
+            eventsArray.forEach(event => {
                 eventsMap[event.id] = event;
             });
             setEvents(eventsMap);
@@ -172,7 +176,7 @@ export default function MyBookings() {
             )}
 
             <div style={{ display: "grid", gap: "var(--space-6)", padding: "var(--space-6)" }}>
-                {bookings.map((booking) => {
+                {Array.isArray(bookings) && bookings.map((booking) => {
                     const event = events[booking.event_id];
                     const receipt = paymentReceipts[booking.id];
 
@@ -273,4 +277,4 @@ export default function MyBookings() {
             </div>
         </div>
     );
-} 
+}
