@@ -180,11 +180,11 @@ jobs:
         # Create a new task definition with updated image tags
         jq --arg IMAGE_TAG "$GITHUB_SHA" \
           '.containerDefinitions[0].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-nginx:" + $IMAGE_TAG |
-           .containerDefinitions[1].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-frontend:" + $IMAGE_TAG |
-           .containerDefinitions[2].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-auth:" + $IMAGE_TAG |
-           .containerDefinitions[3].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-catalog:" + $IMAGE_TAG |
-           .containerDefinitions[4].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-booking:" + $IMAGE_TAG |
-           .containerDefinitions[5].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-payment:" + $IMAGE_TAG |
+           .containerDefinitions[1].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-auth:" + $IMAGE_TAG |
+           .containerDefinitions[2].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-catalog:" + $IMAGE_TAG |
+           .containerDefinitions[3].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-booking:" + $IMAGE_TAG |
+           .containerDefinitions[4].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-payment:" + $IMAGE_TAG |
+           .containerDefinitions[5].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-frontend:" + $IMAGE_TAG |
            .containerDefinitions[6].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-worker:" + $IMAGE_TAG' \
           task-definition-worker-kafka.json > task-definition-updated.json
 
