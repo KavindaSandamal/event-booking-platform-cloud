@@ -84,13 +84,16 @@ class KafkaClient:
                       key: Optional[str] = None, topic: Optional[str] = None) -> bool:
         """Publish an event to Kafka"""
         if not self.enabled or not self.producer:
-            logger.debug(f"Kafka disabled, skipping event: {event_type.value}")
+            event_type_str = event_type.value if hasattr(event_type, 'value') else str(event_type)
+            logger.debug(f"Kafka disabled, skipping event: {event_type_str}")
             return False
 
         try:
-            topic = topic or f"event-booking-{event_type.value.replace('.', '-')}"
+            # Handle both enum and string event_type
+            event_type_str = event_type.value if hasattr(event_type, 'value') else str(event_type)
+            topic = topic or f"event-booking-{event_type_str.replace('.', '-')}"
             event_data = {
-                "event_type": event_type.value,
+                "event_type": event_type_str,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": data,
                 "service": data.get("service", "unknown"),
@@ -105,11 +108,12 @@ class KafkaClient:
                 callback=self._delivery_callback
             )
             self.producer.flush(timeout=10)
-            logger.info(f"Event published: {event_type.value} → {topic}")
+            logger.info(f"Event published: {event_type_str} → {topic}")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to publish event {event_type.value}: {e}")
+            event_type_str = event_type.value if hasattr(event_type, 'value') else str(event_type)
+            logger.error(f"Failed to publish event {event_type_str}: {e}")
             # Note: Topics will be auto-created when first message is published
             return False
 

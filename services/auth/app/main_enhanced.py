@@ -156,7 +156,7 @@ async def register(user: UserCreate, background_tasks: BackgroundTasks, db: Sess
         if KAFKA_AVAILABLE:
             background_tasks.add_task(
                 publish_user_event,
-                EventTypes.USER_REGISTERED.value,
+                EventTypes.USER_REGISTERED,
                 str(db_user.id),
                 email=user.email
             )
@@ -194,7 +194,7 @@ async def login(
         if KAFKA_AVAILABLE and background_tasks:
             background_tasks.add_task(
                 publish_user_event,
-                EventTypes.USER_LOGIN.value,
+                EventTypes.USER_LOGIN,
                 str(user.id),
                 email=user.email
             )
