@@ -14,8 +14,9 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 AUTH_URL = os.getenv("AUTH_URL")
 BOOKING_URL = os.getenv("BOOKING_SERVICE_URL")
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
+# Initialize database connection lazily
+engine = None
+SessionLocal = None
 
 app = FastAPI(title="Payment Service")
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -32,9 +33,23 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
-    Base.metadata.create_all(bind=engine)
+    global engine, SessionLocal
+    if DATABASE_URL:
+        engine = create_engine(DATABASE_URL)
+        SessionLocal = sessionmaker(bind=engine)
+        Base.metadata.create_all(bind=engine)
+    else:
+        print("WARNING: DATABASE_URL not set, database operations will fail")
+    
+    # Debug: Print registered routes
+    print("DEBUG: Registered routes:")
+    for route in app.routes:
+        if hasattr(route, 'methods') and hasattr(route, 'path'):
+            print(f"  {route.methods} {route.path}")
 
 def get_db():
+    if not SessionLocal:
+        raise HTTPException(status_code=503, detail="Database not initialized")
     db = SessionLocal()
     try:
         yield db
@@ -48,12 +63,16 @@ async def get_current_user(authorization: str = Header(None)):
     token = authorization.split(" ")[1]
     
     # Verify token via auth service
+    if not AUTH_URL:
+        raise HTTPException(503, "Auth service not configured")
+    
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{AUTH_URL}/verify", json={"token": token}, timeout=5.0)
             if resp.status_code == 200:
                 return resp.json()["user_id"]
-        except Exception:
+        except Exception as e:
+            print(f"Auth verification failed: {e}")
             pass
     
     raise HTTPException(401, "Invalid token")
@@ -90,6 +109,7 @@ async def process_payment_simple(payment_data: dict, authorization: str = Header
 
 @app.post("/process-payment", response_model=PaymentResponse)
 async def process_payment(payment_req: PaymentRequest, authorization: str = Header(None), db: Session = Depends(get_db)):
+    print("DEBUG: /process-payment endpoint called")
     user_id = await get_current_user(authorization)
     
     # Create payment record

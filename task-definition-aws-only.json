@@ -69,7 +69,7 @@
     },
     {
       "name": "catalog",
-      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-catalog:v1.6",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-catalog:enhanced",
       "cpu": 64,
       "memory": 128,
       "portMappings": [
@@ -118,6 +118,10 @@
         {
           "name": "DATABASE_URL",
           "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
+        },
+        {
+          "name": "CATALOG_URL",
+          "value": "http://localhost:8001"
         },
         {
           "name": "PAYMENT_SERVICE_URL",
