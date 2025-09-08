@@ -326,7 +326,7 @@ resource "aws_ecs_task_definition" "main" {
           value = "amqp://guest:guest@${aws_mq_broker.main.instances[0].endpoints[0]}:5672"
         }
       ]
-      
+       yol
       logConfiguration = {
         logDriver = "awslogs"
         options = {

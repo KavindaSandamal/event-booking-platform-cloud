@@ -1,0 +1,223 @@
+{
+  "family": "event-booking-platform-simplified",
+  "taskRoleArn": "arn:aws:iam::376129882286:role/event-booking-platform-ecs-task-role",
+  "executionRoleArn": "arn:aws:iam::376129882286:role/event-booking-platform-ecs-execution-role",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "nginx",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-nginx:latest",
+      "cpu": 64,
+      "memory": 128,
+      "portMappings": [
+        {
+          "containerPort": 80,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "nginx"
+        }
+      }
+    },
+    {
+      "name": "auth",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-auth:v1.6",
+      "cpu": 64,
+      "memory": 128,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
+        },
+        {
+          "name": "JWT_SECRET",
+          "value": "your-super-secret-jwt-key-change-in-production"
+        },
+        {
+          "name": "KAFKA_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "REDIS_ENABLED",
+          "value": "false"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "auth"
+        }
+      }
+    },
+    {
+      "name": "catalog",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-catalog:v1.6",
+      "cpu": 64,
+      "memory": 128,
+      "portMappings": [
+        {
+          "containerPort": 8001,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
+        },
+        {
+          "name": "KAFKA_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "REDIS_ENABLED",
+          "value": "false"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "catalog"
+        }
+      }
+    },
+    {
+      "name": "booking",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-booking:enhanced",
+      "cpu": 64,
+      "memory": 128,
+      "portMappings": [
+        {
+          "containerPort": 8002,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
+        },
+        {
+          "name": "PAYMENT_SERVICE_URL",
+          "value": "http://localhost:8003"
+        },
+        {
+          "name": "KAFKA_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "REDIS_ENABLED",
+          "value": "false"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "booking"
+        }
+      }
+    },
+    {
+      "name": "payment",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-payment:enhanced",
+      "cpu": 64,
+      "memory": 128,
+      "portMappings": [
+        {
+          "containerPort": 8003,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:H_r4Q7wZs0YS@event-booking-platform-db.cvcceaki0j7j.us-west-2.rds.amazonaws.com:5432/eventdb?sslmode=require"
+        },
+        {
+          "name": "AUTH_URL",
+          "value": "http://localhost:8000"
+        },
+        {
+          "name": "BOOKING_SERVICE_URL",
+          "value": "http://localhost:8002"
+        },
+        {
+          "name": "KAFKA_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "REDIS_ENABLED",
+          "value": "false"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "payment"
+        }
+      }
+    },
+    {
+      "name": "frontend",
+      "image": "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-frontend:latest",
+      "cpu": 64,
+      "memory": 128,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "REACT_APP_API_URL",
+          "value": "http://localhost:80"
+        },
+        {
+          "name": "KAFKA_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "REDIS_ENABLED",
+          "value": "false"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-booking-platform",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "frontend"
+        }
+      }
+    }
+  ]
+}

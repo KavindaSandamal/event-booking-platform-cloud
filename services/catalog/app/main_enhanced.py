@@ -14,13 +14,20 @@ from datetime import datetime
 # Import shared components
 import sys
 sys.path.append('/app/shared')
+# Check if Kafka is enabled via environment variable
+KAFKA_ENABLED = os.getenv("KAFKA_ENABLED", "false").lower() == "true"
+
 # Try to import Kafka client, fallback if not available
-try:
-    from kafka_client import get_kafka_client, publish_event_event, EventTypes
-    KAFKA_AVAILABLE = True
-except ImportError:
+if KAFKA_ENABLED:
+    try:
+        from kafka_client import get_kafka_client, publish_event_event, EventTypes
+        KAFKA_AVAILABLE = True
+    except ImportError:
+        KAFKA_AVAILABLE = False
+        print("Kafka client not available, continuing without Kafka features")
+else:
     KAFKA_AVAILABLE = False
-    print("Kafka client not available, continuing without Kafka features")
+    print("Kafka disabled via environment variable")
 
 # Try to import circuit breaker, fallback if not available
 try:

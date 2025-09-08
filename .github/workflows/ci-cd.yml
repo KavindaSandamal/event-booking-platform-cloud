@@ -16,7 +16,7 @@ env:
   ECR_REGISTRY: 376129882286.dkr.ecr.us-west-2.amazonaws.com
   ECS_CLUSTER: event-booking-platform-cluster
   ECS_SERVICE: event-booking-platform-service
-  ECS_TASK_DEFINITION: event-booking-platform-task-fixed
+  ECS_TASK_DEFINITION: event-booking-platform-aws-only
 
 jobs:
   build-and-test:
@@ -184,9 +184,8 @@ jobs:
            .containerDefinitions[2].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-catalog:" + $IMAGE_TAG |
            .containerDefinitions[3].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-booking:" + $IMAGE_TAG |
            .containerDefinitions[4].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-payment:" + $IMAGE_TAG |
-           .containerDefinitions[5].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-frontend:" + $IMAGE_TAG |
-           .containerDefinitions[6].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-worker:" + $IMAGE_TAG' \
-          task-definition-worker-kafka.json > task-definition-updated.json
+           .containerDefinitions[5].image = "376129882286.dkr.ecr.us-west-2.amazonaws.com/event-booking-platform-frontend:" + $IMAGE_TAG' \
+          task-definition-aws-only.json > task-definition-updated.json
 
     - name: Register new task definition
       run: |

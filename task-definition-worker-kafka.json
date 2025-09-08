@@ -5,7 +5,7 @@
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "1024",
-  "memory": "2048",
+  "memory": "3072",
   "containerDefinitions": [
     {
       "name": "nginx",
